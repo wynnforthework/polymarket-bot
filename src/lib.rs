@@ -6,8 +6,10 @@
 //! 
 //! ```text
 //! Ingester (TG/X/Chain) → Processor (LLM) → Strategy → Executor → Notifier
-//!                                              ↑
+//!                                              ↑                    ↑
 //!                            Analysis (Pattern Recognition, Copy Trade)
+//!                                              ↑
+//!                                    Risk Management (Daily P&L, Volatility, Correlation)
 //! ```
 
 pub mod analysis;
@@ -19,9 +21,11 @@ pub mod ingester;
 pub mod model;
 pub mod monitor;
 pub mod notify;
+pub mod risk;
 pub mod storage;
 pub mod strategy;
 pub mod telegram;
+pub mod testing;
 pub mod types;
 
 #[cfg(test)]

@@ -17,6 +17,7 @@ use polymarket_bot::{
     model::{EnsembleModel, LlmModel, ProbabilityModel},
     monitor::Monitor,
     notify::Notifier,
+    risk::RiskManager,
     storage::Database,
     strategy::{
         SignalGenerator,
@@ -170,6 +171,12 @@ async fn run_bot(config: Config, dry_run: bool) -> anyhow::Result<()> {
     let mut crypto_tracker = CryptoPriceTracker::new();
     let signal_filter = SignalFilter::new();
     tracing::info!("Signal filter initialized (15-min dedup, fusion required)");
+    
+    // Initialize advanced risk manager
+    let risk_manager = Arc::new(tokio::sync::Mutex::new(
+        RiskManager::new(config.risk.clone())
+    ));
+    tracing::info!("Risk manager initialized (daily P&L tracking, volatility sizing, correlation detection)");
     
     // Initialize crypto price history from Binance klines
     if let Err(e) = crypto_tracker.init_history().await {
@@ -435,18 +442,32 @@ async fn run_bot(config: Config, dry_run: bool) -> anyhow::Result<()> {
         let notifier_clone = notifier.clone();
         let db_clone = db.clone();
         let client_clone = client.clone();
+        let risk_manager_clone = risk_manager.clone();
         
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(24 * 60 * 60));
+            let mut interval = tokio::time::interval(Duration::from_secs(60 * 60)); // Check hourly
             // Wait for first tick (starts immediately)
             interval.tick().await;
             
             loop {
                 interval.tick().await;
                 
-                // Send daily report at midnight UTC
+                // Send daily report at midnight UTC and reset risk tracker
                 let now = chrono::Utc::now();
                 if now.hour() == 0 && now.minute() < 5 {
+                    // Reset daily risk tracker
+                    {
+                        let mut rm = risk_manager_clone.lock().await;
+                        let daily_pnl = rm.daily_pnl();
+                        let win_rate = rm.pnl_tracker.win_rate();
+                        tracing::info!(
+                            "📊 Daily risk reset - P&L: ${:.2}, Win rate: {:.1}%",
+                            daily_pnl,
+                            win_rate.unwrap_or(0.0)
+                        );
+                        rm.reset_daily();
+                    }
+                    
                     let balance = client_clone.clob.get_balance().await.unwrap_or(Decimal::ZERO);
                     let stats = db_clone.get_daily_stats().await.unwrap_or_default();
                     let _ = notifier_clone.daily_report(&stats, balance).await;
@@ -518,11 +539,34 @@ async fn run_bot(config: Config, dry_run: bool) -> anyhow::Result<()> {
         }
 
         tracing::info!("Scanning {} markets...", markets.len());
+        
+        // Check risk limits before trading
+        {
+            let rm = risk_manager.lock().await;
+            match rm.can_trade() {
+                polymarket_bot::risk::RiskCheckResult::Blocked { reason } => {
+                    tracing::warn!("⚠️ Trading blocked: {}", reason);
+                    if tg_config.as_ref().map(|c| c.notify_errors).unwrap_or(false) {
+                        let _ = notifier.send(&format!("⚠️ Trading paused: {}", reason)).await;
+                    }
+                    tokio::time::sleep(Duration::from_secs(config.strategy.scan_interval_secs)).await;
+                    continue;
+                }
+                polymarket_bot::risk::RiskCheckResult::Allowed => {}
+            }
+        }
 
         // Analyze each market
         for market in &markets {
             // Check if this is a crypto Up/Down market
             let is_crypto_market = CryptoHfStrategy::is_crypto_hf_market(market).is_some();
+            
+            // Update volatility data for risk manager
+            if let Some(price) = market.yes_price() {
+                let mut rm = risk_manager.lock().await;
+                rm.update_volatility(&market.id, price);
+                rm.update_correlation(&market.id, price, chrono::Utc::now().timestamp());
+            }
             
             // Skip low liquidity markets (lower threshold for crypto markets)
             let min_liquidity = if is_crypto_market {
@@ -603,7 +647,17 @@ async fn run_bot(config: Config, dry_run: bool) -> anyhow::Result<()> {
                             db.save_trade(&trade).await?;
 
                             // Update PnL tracking for risk management
-                            // (simplified - real PnL requires mark-to-market)
+                            {
+                                let mut rm = risk_manager.lock().await;
+                                rm.pnl_tracker.set_starting_balance(balance);
+                                // Record trade fee as immediate cost (actual P&L comes later on close)
+                                rm.record_trade(-trade.fee);
+                                tracing::debug!(
+                                    "Risk: Daily P&L = ${:.2}, remaining budget = ${:.2}",
+                                    rm.daily_pnl(),
+                                    rm.pnl_tracker.remaining_loss_budget().unwrap_or(Decimal::ZERO)
+                                );
+                            }
                             let _ = cmd_handler.check_risk_limits(Decimal::ZERO).await;
 
                             // Send trade notification

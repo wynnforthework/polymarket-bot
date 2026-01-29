@@ -126,3 +126,7 @@ pub struct TwitterIngesterConfig {
 
 // Binance WebSocket module
 pub mod binance;
+
+// Whale tracking module
+pub mod whale_tracker;
+pub use whale_tracker::{WhaleTracker, WhaleActivity, TrackedWhale, WhaleTrackerConfig};

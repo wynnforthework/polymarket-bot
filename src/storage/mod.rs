@@ -1,5 +1,8 @@
 //! Data storage and persistence
 
+pub mod history;
+pub mod cache;
+
 #[cfg(test)]
 mod tests;
 
