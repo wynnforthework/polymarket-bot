@@ -1,0 +1,51 @@
+# Polymarket Trading Bot Configuration
+
+[polymarket]
+# CLOB API endpoint
+clob_url = "https://clob.polymarket.com"
+# Gamma API endpoint (market data)
+gamma_url = "https://gamma-api.polymarket.com"
+# Your private key (hex, without 0x prefix) - KEEP SECRET!
+private_key = "YOUR_PRIVATE_KEY_HERE"
+# Funder address (for proxy wallets, optional)
+# funder_address = "0x..."
+# Chain ID (137 for Polygon mainnet)
+chain_id = 137
+# Signature type (0=EOA, 1=Magic, 2=Proxy)
+signature_type = 0
+
+[strategy]
+# Minimum edge (model vs market) to trigger trade (0.10 = 10%)
+min_edge = 0.10
+# Minimum confidence score to trade (0.60 = 60%)
+min_confidence = 0.60
+# Kelly fraction (0.25 = quarter Kelly)
+kelly_fraction = 0.25
+# Market scan interval in seconds
+scan_interval_secs = 300
+# Model update interval in seconds
+model_update_interval_secs = 3600
+
+[risk]
+# Maximum position size as fraction of portfolio (0.05 = 5%)
+max_position_pct = 0.05
+# Maximum total exposure as fraction of portfolio
+max_exposure_pct = 0.50
+# Maximum daily loss as fraction of portfolio
+max_daily_loss_pct = 0.10
+# Minimum USDC balance to keep (for gas/reserves)
+min_balance_reserve = 100
+# Maximum number of open positions
+max_open_positions = 10
+
+[database]
+# SQLite database path
+path = "data/polymarket.db"
+
+[llm]
+# LLM provider (anthropic, openai)
+provider = "anthropic"
+# API key - KEEP SECRET!
+api_key = "YOUR_ANTHROPIC_API_KEY"
+# Model name
+model = "claude-sonnet-4-20250514"

@@ -1,0 +1,60 @@
+[package]
+name = "polymarket_bot"
+version = "0.1.0"
+edition = "2021"
+description = "Polymarket probability trading bot"
+authors = ["Brain <brain@example.com>"]
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.42", features = ["full"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+
+# WebSocket
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
+futures-util = "0.3"
+
+# Serialization
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0"
+
+# Web3 / Crypto (using ethers for stability)
+ethers = { version = "2.0", features = ["rustls"] }
+hex = "0.4"
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "chrono"] }
+
+# Config
+config = "0.15"
+dotenvy = "0.15"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# Utilities
+rust_decimal = { version = "1.37", features = ["serde"] }
+async-trait = "0.1"
+shellexpand = "3.1"
+uuid = { version = "1.11", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockall = "0.13"
+
+[[bin]]
+name = "polymarket-bot"
+path = "src/main.rs"
