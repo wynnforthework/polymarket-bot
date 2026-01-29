@@ -1,0 +1,56 @@
+# Polymarket Bot - 优化策略配置 v1.0
+# 基于 1000 USDC Dry Run 分析优化
+# 优化日期: 2026-01-29
+
+[strategy]
+# 信号过滤 - 更严格
+min_edge = 0.05              # 5% 最小边际 (原 2%)
+min_confidence = 0.70        # 70% 置信度 (原 50%)
+kelly_fraction = 0.15        # 15% Kelly (原 25%)，更保守
+
+# 交易频率控制
+max_trades_per_hour = 3      # 每小时最多 3 笔
+min_trade_interval_mins = 10 # 交易间隔至少 10 分钟
+cooldown_after_loss_mins = 30 # 亏损后冷却 30 分钟
+
+[risk]
+# 仓位控制 - 更小仓位
+max_position_pct = 0.02      # 2% 单笔最大仓位 (原 5%)
+max_total_exposure_pct = 0.30 # 30% 总暴露 (原 50%)
+max_daily_loss_pct = 0.05    # 5% 日亏损限制 (原 10%)
+min_balance_reserve = 0.20   # 保留 20% 最低余额
+
+# 止损止盈
+stop_loss_pct = 0.15         # 15% 止损
+take_profit_pct = 0.25       # 25% 止盈
+trailing_stop_pct = 0.10     # 10% 追踪止损
+max_holding_hours = 48       # 最长持仓 48 小时
+
+[market_quality]
+# 市场质量过滤
+min_volume_24h = 10000       # 最小 24h 成交量 $10k
+min_liquidity = 5000         # 最小流动性 $5k
+max_spread_pct = 0.05        # 最大价差 5%
+min_market_age_hours = 24    # 市场至少存在 24 小时
+
+[execution]
+# 执行优化
+max_slippage_pct = 0.02      # 最大滑点 2%
+order_timeout_secs = 30      # 订单超时 30 秒
+use_limit_orders = true      # 使用限价单
+price_improvement_pct = 0.005 # 0.5% 价格改进
+
+[blackswan]
+# 黑天鹅保护
+enable_protection = true
+flash_crash_threshold = 0.10 # 10% 闪崩阈值
+volatility_spike_multiplier = 2.5
+correlation_crash_markets = 2 # 2 个市场同崩触发
+auto_halt_on_trigger = true
+
+[monitoring]
+# 监控告警
+alert_drawdown_pct = 0.08    # 8% 回撤告警
+alert_loss_streak = 3        # 连亏 3 笔告警
+daily_report = true
+realtime_pnl_tracking = true

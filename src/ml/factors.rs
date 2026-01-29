@@ -356,11 +356,13 @@ impl MultiFactorFusion {
         // Simple Gram-Schmidt orthogonalization
         for i in 1..n {
             for j in 0..i {
-                let dot = signals[i] * signals[j];
-                let norm_sq = signals[j] * signals[j];
+                let signal_i = signals[i];
+                let signal_j = signals[j];
+                let dot = signal_i * signal_j;
+                let norm_sq = signal_j * signal_j;
                 
                 if norm_sq > dec!(0.0001) {
-                    signals[i] -= (dot / norm_sq) * signals[j];
+                    signals[i] = signal_i - (dot / norm_sq) * signal_j;
                 }
             }
         }
