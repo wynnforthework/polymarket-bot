@@ -7,7 +7,7 @@
 //! - Mock: Test clients for offline testing
 
 pub mod clob;
-mod gamma;
+pub mod gamma;
 mod auth;
 mod websocket;
 pub mod mock;
@@ -16,7 +16,7 @@ pub mod orderbook_stream;
 mod tests;
 
 pub use clob::{ClobClient, OrderBook, OrderBookLevel};
-pub use gamma::GammaClient;
+pub use gamma::{GammaClient, CRYPTO_SERIES, CRYPTO_SEARCH_QUERIES};
 pub use auth::PolySigner;
 pub use websocket::MarketStream;
 pub use orderbook_stream::{OrderBookManager, OrderBookUpdate, LocalOrderBook};

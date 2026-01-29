@@ -4,9 +4,11 @@
 
 use crate::error::{BotError, Result};
 use crate::types::{Market, Outcome};
+use chrono::{DateTime, Utc};
 use reqwest::Client;
 use rust_decimal::Decimal;
 use serde::Deserialize;
+use std::collections::HashSet;
 use tracing::debug;
 
 /// Known crypto series IDs
@@ -17,6 +19,15 @@ pub const CRYPTO_SERIES: &[(&str, &str, u64)] = &[
     ("SOL Hourly", "solana-up-or-down-hourly", 10122),
     ("SOL Daily", "solana-up-or-down-daily", 10086),
     ("XRP Hourly", "xrp-up-or-down-hourly", 10123),
+];
+
+/// Dynamic search queries for hourly crypto markets
+/// These markets are created dynamically with format: bitcoin-up-or-down-{month}-{day}-{hour}pm-et
+pub const CRYPTO_SEARCH_QUERIES: &[&str] = &[
+    "bitcoin up or down",
+    "ethereum up or down", 
+    "solana up or down",
+    "xrp up or down",
 ];
 
 /// Gamma API client for market data
@@ -187,9 +198,12 @@ impl GammaClient {
     }
 
     /// Get active crypto markets (BTC/ETH Up/Down)
+    /// Combines static series + dynamic search for hourly markets
     pub async fn get_crypto_markets(&self) -> Result<Vec<Market>> {
         let mut markets = Vec::new();
+        let mut seen_ids = std::collections::HashSet::new();
 
+        // 1. Fetch from known series (static)
         for (name, _slug, series_id) in CRYPTO_SERIES {
             debug!("Fetching {} markets from series {}", name, series_id);
             
@@ -235,15 +249,112 @@ impl GammaClient {
                 if let Some(event_markets) = full_event.markets {
                     for em in event_markets {
                         if let Some(market) = self.parse_market(em) {
-                            markets.push(market);
+                            if seen_ids.insert(market.id.clone()) {
+                                markets.push(market);
+                            }
                         }
                     }
                 }
             }
         }
 
-        debug!("Found {} crypto markets", markets.len());
+        // 2. Dynamic search for hourly markets (catches bitcoin-up-or-down-january-29-5pm-et etc.)
+        let dynamic_markets = self.search_crypto_hourly_markets().await?;
+        for market in dynamic_markets {
+            if seen_ids.insert(market.id.clone()) {
+                markets.push(market);
+            }
+        }
+
+        debug!("Found {} total crypto markets (series + dynamic)", markets.len());
         Ok(markets)
+    }
+
+    /// Search for dynamic hourly crypto markets
+    /// These are created with slug format: {coin}-up-or-down-{month}-{day}-{hour}pm-et
+    pub async fn search_crypto_hourly_markets(&self) -> Result<Vec<Market>> {
+        let mut markets = Vec::new();
+        let mut seen_ids = std::collections::HashSet::new();
+
+        for query in CRYPTO_SEARCH_QUERIES {
+            debug!("Searching for dynamic crypto markets: {}", query);
+            
+            let url = format!("{}/markets", self.base_url);
+            let resp = self.http
+                .get(&url)
+                .query(&[
+                    ("_q", *query),
+                    ("active", "true"),
+                    ("closed", "false"),
+                    ("_limit", "50"), // Get more results to catch hourly markets
+                ])
+                .send()
+                .await;
+
+            let resp = match resp {
+                Ok(r) => r,
+                Err(e) => {
+                    debug!("Search failed for '{}': {}", query, e);
+                    continue;
+                }
+            };
+
+            let results: Vec<GammaMarket> = match resp.json().await {
+                Ok(r) => r,
+                Err(e) => {
+                    debug!("Failed to parse search results for '{}': {}", query, e);
+                    continue;
+                }
+            };
+
+            for gm in results {
+                // Filter: must contain "up or down" in question
+                let q_lower = gm.question.to_lowercase();
+                if !q_lower.contains("up or down") {
+                    continue;
+                }
+                
+                // Filter: must be crypto related
+                let is_crypto = q_lower.contains("bitcoin") 
+                    || q_lower.contains("btc")
+                    || q_lower.contains("ethereum")
+                    || q_lower.contains("eth")
+                    || q_lower.contains("solana")
+                    || q_lower.contains("sol")
+                    || q_lower.contains("xrp");
+                
+                if !is_crypto {
+                    continue;
+                }
+
+                if let Some(market) = self.parse_market(gm) {
+                    if seen_ids.insert(market.id.clone()) {
+                        debug!("Found dynamic market: {} (liq: ${})", 
+                            market.question, market.liquidity);
+                        markets.push(market);
+                    }
+                }
+            }
+        }
+
+        debug!("Found {} dynamic hourly crypto markets", markets.len());
+        Ok(markets)
+    }
+
+    /// Get markets ending soon (within N hours) for timing-sensitive strategies
+    pub async fn get_markets_ending_soon(&self, hours: u32) -> Result<Vec<Market>> {
+        let markets = self.search_crypto_hourly_markets().await?;
+        let now = chrono::Utc::now();
+        let cutoff = now + chrono::Duration::hours(hours as i64);
+        
+        Ok(markets
+            .into_iter()
+            .filter(|m| {
+                m.end_date
+                    .map(|end| end <= cutoff && end > now)
+                    .unwrap_or(false)
+            })
+            .collect())
     }
 }
 

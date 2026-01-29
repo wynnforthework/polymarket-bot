@@ -204,4 +204,43 @@ mod tests {
         assert_eq!(trade.side, Side::Sell);
         assert_eq!(trade.fee, dec!(0.50));
     }
+
+    #[test]
+    fn test_crypto_search_queries_exist() {
+        use crate::client::gamma::CRYPTO_SEARCH_QUERIES;
+        assert!(CRYPTO_SEARCH_QUERIES.len() >= 4);
+        assert!(CRYPTO_SEARCH_QUERIES.contains(&"bitcoin up or down"));
+        assert!(CRYPTO_SEARCH_QUERIES.contains(&"ethereum up or down"));
+    }
+
+    #[test]
+    fn test_crypto_series_exist() {
+        use crate::client::gamma::CRYPTO_SERIES;
+        assert!(CRYPTO_SERIES.len() >= 6);
+        // Check BTC series
+        assert!(CRYPTO_SERIES.iter().any(|(name, _, _)| name.contains("BTC")));
+        // Check ETH series
+        assert!(CRYPTO_SERIES.iter().any(|(name, _, _)| name.contains("ETH")));
+    }
+
+    #[test]
+    fn test_hourly_market_question_detection() {
+        // Test dynamic hourly market format detection
+        let questions = vec![
+            ("Bitcoin Up or Down - January 29, 5PM-6PM ET", true),
+            ("Ethereum Up or Down - January 29, 10AM ET", true),
+            ("Solana Up or Down - January 29", true),
+            ("XRP Up or Down - January 29, 11PM ET", true),
+            ("Will Trump win?", false),
+            ("Bitcoin price tomorrow", false),
+        ];
+
+        for (question, expected) in questions {
+            let q_lower = question.to_lowercase();
+            let is_crypto_up_down = q_lower.contains("up or down") 
+                && (q_lower.contains("bitcoin") || q_lower.contains("ethereum")
+                    || q_lower.contains("solana") || q_lower.contains("xrp"));
+            assert_eq!(is_crypto_up_down, expected, "Failed for: {}", question);
+        }
+    }
 }
