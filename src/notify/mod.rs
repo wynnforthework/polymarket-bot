@@ -2,6 +2,9 @@
 //!
 //! Sends trading signals, executions, and alerts to Telegram.
 
+#[cfg(test)]
+mod tests;
+
 use crate::error::Result;
 use crate::types::{Signal, Side, Trade};
 use crate::monitor::PerformanceStats;
