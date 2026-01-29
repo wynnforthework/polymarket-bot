@@ -266,6 +266,7 @@ pub struct CryptoMarketInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::Outcome;
 
     #[test]
     fn test_parse_crypto_market() {
@@ -284,5 +285,190 @@ mod tests {
         let info = CryptoHfStrategy::is_crypto_hf_market(&market);
         assert!(info.is_some());
         assert_eq!(info.unwrap().asset, "BTC");
+    }
+
+    #[test]
+    fn test_parse_eth_market() {
+        let market = Market {
+            id: "eth1".to_string(),
+            question: "Ethereum Up or Down - January 28, 9PM ET".to_string(),
+            description: None,
+            end_date: None,
+            volume: Decimal::ZERO,
+            liquidity: Decimal::ZERO,
+            outcomes: vec![],
+            active: true,
+            closed: false,
+        };
+        
+        let info = CryptoHfStrategy::is_crypto_hf_market(&market);
+        assert!(info.is_some());
+        assert_eq!(info.unwrap().asset, "ETH");
+    }
+
+    #[test]
+    fn test_parse_sol_market() {
+        let market = Market {
+            id: "sol1".to_string(),
+            question: "Solana Up or Down - January 28".to_string(),
+            description: None,
+            end_date: None,
+            volume: Decimal::ZERO,
+            liquidity: Decimal::ZERO,
+            outcomes: vec![],
+            active: true,
+            closed: false,
+        };
+        
+        let info = CryptoHfStrategy::is_crypto_hf_market(&market);
+        assert!(info.is_some());
+        assert_eq!(info.unwrap().asset, "SOL");
+    }
+
+    #[test]
+    fn test_parse_xrp_market() {
+        let market = Market {
+            id: "xrp1".to_string(),
+            question: "XRP Up or Down - January 28, 11PM ET".to_string(),
+            description: None,
+            end_date: None,
+            volume: Decimal::ZERO,
+            liquidity: Decimal::ZERO,
+            outcomes: vec![],
+            active: true,
+            closed: false,
+        };
+        
+        let info = CryptoHfStrategy::is_crypto_hf_market(&market);
+        assert!(info.is_some());
+        assert_eq!(info.unwrap().asset, "XRP");
+    }
+
+    #[test]
+    fn test_non_crypto_market() {
+        let market = Market {
+            id: "politics1".to_string(),
+            question: "Will Trump win in 2024?".to_string(),
+            description: None,
+            end_date: None,
+            volume: Decimal::ZERO,
+            liquidity: Decimal::ZERO,
+            outcomes: vec![],
+            active: true,
+            closed: false,
+        };
+        
+        let info = CryptoHfStrategy::is_crypto_hf_market(&market);
+        assert!(info.is_none());
+    }
+
+    #[test]
+    fn test_crypto_hf_strategy_default() {
+        let strategy = CryptoHfStrategy::default();
+        assert_eq!(strategy.min_momentum, dec!(0.003));
+        assert_eq!(strategy.entry_minutes_before_close, 3);
+        assert_eq!(strategy.certainty_threshold, dec!(0.85));
+        assert_eq!(strategy.max_position_usd, dec!(20));
+    }
+
+    #[test]
+    fn test_crypto_price_tracker_new() {
+        let tracker = CryptoPriceTracker::new();
+        assert_eq!(tracker.max_history, 100);
+    }
+
+    #[test]
+    fn test_price_point_creation() {
+        let point = PricePoint {
+            price: dec!(50000),
+            timestamp: Utc::now(),
+        };
+        assert_eq!(point.price, dec!(50000));
+    }
+
+    #[test]
+    fn test_price_point_clone() {
+        let point = PricePoint {
+            price: dec!(3000),
+            timestamp: Utc::now(),
+        };
+        let cloned = point.clone();
+        assert_eq!(point.price, cloned.price);
+    }
+
+    #[test]
+    fn test_crypto_market_info() {
+        let info = CryptoMarketInfo {
+            asset: "BTC".to_string(),
+            is_15_min: true,
+        };
+        assert_eq!(info.asset, "BTC");
+        assert!(info.is_15_min);
+    }
+
+    #[test]
+    fn test_15_min_market_detection() {
+        let market = Market {
+            id: "test".to_string(),
+            question: "Bitcoin Up or Down - January 28, 10:45PM-11:00PM ET".to_string(),
+            description: None,
+            end_date: None,
+            volume: Decimal::ZERO,
+            liquidity: Decimal::ZERO,
+            outcomes: vec![],
+            active: true,
+            closed: false,
+        };
+        
+        let info = CryptoHfStrategy::is_crypto_hf_market(&market).unwrap();
+        assert!(info.is_15_min);
+    }
+
+    #[test]
+    fn test_hourly_market_detection() {
+        let market = Market {
+            id: "test".to_string(),
+            question: "Bitcoin Up or Down - January 28, 10PM ET".to_string(),
+            description: None,
+            end_date: None,
+            volume: Decimal::ZERO,
+            liquidity: Decimal::ZERO,
+            outcomes: vec![],
+            active: true,
+            closed: false,
+        };
+        
+        let info = CryptoHfStrategy::is_crypto_hf_market(&market).unwrap();
+        assert!(!info.is_15_min);
+    }
+
+    #[test]
+    fn test_market_with_outcomes() {
+        let market = Market {
+            id: "btc1".to_string(),
+            question: "Bitcoin Up or Down - January 28, 11PM ET".to_string(),
+            description: None,
+            end_date: None,
+            volume: dec!(10000),
+            liquidity: dec!(5000),
+            outcomes: vec![
+                Outcome {
+                    token_id: "up".to_string(),
+                    outcome: "Up".to_string(),
+                    price: dec!(0.65),
+                },
+                Outcome {
+                    token_id: "down".to_string(),
+                    outcome: "Down".to_string(),
+                    price: dec!(0.35),
+                },
+            ],
+            active: true,
+            closed: false,
+        };
+        
+        let info = CryptoHfStrategy::is_crypto_hf_market(&market);
+        assert!(info.is_some());
+        assert_eq!(market.outcomes.len(), 2);
     }
 }

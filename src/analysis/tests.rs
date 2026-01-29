@@ -121,4 +121,166 @@ mod tests {
         assert!(pattern.win_rate > 0.5);
         assert!(pattern.confidence > 0.5);
     }
+
+    #[test]
+    fn test_trade_record_creation() {
+        let record = TradeRecord {
+            trader: "trader1".to_string(),
+            market_id: "m1".to_string(),
+            market_question: "Test?".to_string(),
+            side: Side::Buy,
+            entry_price: dec!(0.50),
+            exit_price: Some(dec!(0.60)),
+            size: dec!(100),
+            entry_time: Utc::now(),
+            exit_time: Some(Utc::now()),
+            pnl: Some(dec!(10)),
+            outcome: Some(TradeOutcome::Win),
+        };
+        
+        assert_eq!(record.trader, "trader1");
+        assert_eq!(record.side, Side::Buy);
+        assert_eq!(record.pnl, Some(dec!(10)));
+    }
+
+    #[test]
+    fn test_trade_record_without_exit() {
+        let record = TradeRecord {
+            trader: "trader1".to_string(),
+            market_id: "m1".to_string(),
+            market_question: "Test?".to_string(),
+            side: Side::Sell,
+            entry_price: dec!(0.70),
+            exit_price: None,
+            size: dec!(50),
+            entry_time: Utc::now(),
+            exit_time: None,
+            pnl: None,
+            outcome: Some(TradeOutcome::Pending),
+        };
+        
+        assert!(record.exit_price.is_none());
+        assert!(record.pnl.is_none());
+    }
+
+    #[test]
+    fn test_trader_insights_default() {
+        let insights = TraderInsights {
+            trader: "test".to_string(),
+            total_trades: 0,
+            win_rate: 0.0,
+            total_pnl: Decimal::ZERO,
+            avg_position_size: Decimal::ZERO,
+            avg_hold_time_hours: 0.0,
+            patterns: vec![],
+            preferred_categories: vec![],
+            active_hours: vec![],
+            entry_insights: EntryInsights::default(),
+            exit_insights: ExitInsights::default(),
+        };
+        
+        assert_eq!(insights.total_trades, 0);
+        assert!(insights.patterns.is_empty());
+    }
+
+    #[test]
+    fn test_trader_insights_with_patterns() {
+        let pattern = TradingPattern {
+            name: "Contrarian".to_string(),
+            description: "Bets against consensus".to_string(),
+            win_rate: 0.70,
+            avg_win: dec!(80),
+            avg_loss: dec!(40),
+            expected_value: dec!(30),
+            sample_count: 50,
+            confidence: 0.9,
+        };
+        
+        let insights = TraderInsights {
+            trader: "pro_trader".to_string(),
+            total_trades: 100,
+            win_rate: 0.65,
+            total_pnl: dec!(5000),
+            avg_position_size: dec!(200),
+            avg_hold_time_hours: 24.0,
+            patterns: vec![pattern],
+            preferred_categories: vec!["Crypto".to_string()],
+            active_hours: vec![9, 10, 11, 12, 13, 14, 15, 16],
+            entry_insights: EntryInsights::default(),
+            exit_insights: ExitInsights::default(),
+        };
+        
+        assert_eq!(insights.patterns.len(), 1);
+        assert_eq!(insights.patterns[0].name, "Contrarian");
+    }
+
+    #[test]
+    fn test_multiple_trades_different_outcomes() {
+        let mut analyzer = TradeAnalyzer::new();
+        
+        analyzer.add_trade(make_trade(dec!(100), TradeOutcome::Win));
+        analyzer.add_trade(make_trade(dec!(-50), TradeOutcome::Loss));
+        analyzer.add_trade(make_trade(dec!(0), TradeOutcome::Pending));
+        
+        let insights = analyzer.analyze_trader("test_trader");
+        assert_eq!(insights.total_trades, 3);
+    }
+
+    #[test]
+    fn test_all_losing_trades() {
+        let mut analyzer = TradeAnalyzer::new();
+        
+        for _ in 0..5 {
+            analyzer.add_trade(make_trade(dec!(-30), TradeOutcome::Loss));
+        }
+        
+        let insights = analyzer.analyze_trader("test_trader");
+        assert_eq!(insights.win_rate, 0.0);
+        assert_eq!(insights.total_pnl, dec!(-150));
+    }
+
+    #[test]
+    fn test_all_winning_trades() {
+        let mut analyzer = TradeAnalyzer::new();
+        
+        for _ in 0..5 {
+            analyzer.add_trade(make_trade(dec!(40), TradeOutcome::Win));
+        }
+        
+        let insights = analyzer.analyze_trader("test_trader");
+        assert_eq!(insights.win_rate, 1.0);
+        assert_eq!(insights.total_pnl, dec!(200));
+    }
+
+    #[test]
+    fn test_pattern_clone() {
+        let pattern = TradingPattern {
+            name: "Test".to_string(),
+            description: "Desc".to_string(),
+            win_rate: 0.5,
+            avg_win: dec!(10),
+            avg_loss: dec!(5),
+            expected_value: dec!(2.5),
+            sample_count: 10,
+            confidence: 0.7,
+        };
+        
+        let cloned = pattern.clone();
+        assert_eq!(pattern.name, cloned.name);
+        assert_eq!(pattern.win_rate, cloned.win_rate);
+    }
+
+    #[test]
+    fn test_trader_type_clone() {
+        let trader_type = TraderType::Whale;
+        let cloned = trader_type.clone();
+        assert_eq!(trader_type, cloned);
+    }
+
+    #[test]
+    fn test_risk_level_clone() {
+        let risk = RiskLevel::High;
+        let cloned = risk.clone();
+        assert_eq!(risk, cloned);
+    }
 }
