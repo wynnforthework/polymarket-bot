@@ -216,7 +216,8 @@ mod tests {
         // All benchmarks should complete
         for result in &results {
             assert!(result.iterations > 0);
-            assert!(result.total_time_ms >= 0);
+            // total_time_ms is u64, always >= 0; just verify benchmark ran
+            assert!(result.iterations > 0 || result.total_time_ms > 0);
         }
     }
 

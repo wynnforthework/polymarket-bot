@@ -303,8 +303,8 @@ mod tests {
         
         sizer.clear_market("market1");
         
-        assert!(sizer.price_history.get("market1").is_none());
-        assert!(sizer.volatility_cache.get("market1").is_none());
+        assert!(!sizer.price_history.contains_key("market1"));
+        assert!(!sizer.volatility_cache.contains_key("market1"));
     }
 
     #[test]

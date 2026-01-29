@@ -774,7 +774,7 @@ mod tests {
         
         protector.clear_market("market1");
         
-        assert!(protector.price_history.get("market1").is_none());
+        assert!(!protector.price_history.contains_key("market1"));
         assert!(!protector.high_risk_markets.contains_key("market1"));
     }
 
@@ -791,10 +791,9 @@ mod tests {
             protector.update("market1", price, None);
         }
         
-        // Events should be recorded
-        let count = protector.recent_event_count(24);
-        // May or may not have triggered depending on exact calculations
-        assert!(count >= 0);
+        // Events should be recorded (count is valid)
+        let _count = protector.recent_event_count(24);
+        // Count is always >= 0 for unsigned type, just verify it returns
     }
 
     #[test]
