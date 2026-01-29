@@ -204,9 +204,7 @@ Example response:
                 role: "user".to_string(),
                 content: prompt.to_string(),
             }],
-            response_format: Some(ResponseFormat {
-                r#type: "json_object".to_string(),
-            }),
+            response_format: None, // DeepSeek doesn't need this
         };
 
         let mut req = self
@@ -218,7 +216,12 @@ Example response:
             req = req.header("Authorization", format!("Bearer {}", key));
         }
 
-        let response: OpenAIResponse = req.json(&request).send().await?.json().await?;
+        let resp = req.json(&request).send().await?;
+        let text = resp.text().await?;
+        tracing::debug!("LLM raw response: {}", &text[..text.len().min(500)]);
+        
+        let response: OpenAIResponse = serde_json::from_str(&text)
+            .map_err(|e| BotError::Api(format!("JSON parse error: {} - response: {}", e, &text[..text.len().min(200)])))?;
 
         response
             .choices

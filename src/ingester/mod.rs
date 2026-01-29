@@ -123,3 +123,6 @@ pub struct TwitterIngesterConfig {
     /// Keywords to filter
     pub keywords: Vec<String>,
 }
+
+// Binance WebSocket module
+pub mod binance;

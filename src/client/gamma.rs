@@ -105,11 +105,24 @@ impl GammaClient {
     }
 
     fn parse_market(&self, gm: GammaMarket) -> Option<Market> {
-        // Parse outcome prices
+        // Parse outcome prices - API returns string array like ["0.55", "0.45"]
         let prices: Vec<f64> = gm
             .outcome_prices
             .as_ref()
-            .and_then(|s| serde_json::from_str(s).ok())
+            .and_then(|s| {
+                // Try parsing as Vec<String> first (API format)
+                if let Ok(string_prices) = serde_json::from_str::<Vec<String>>(s) {
+                    let parsed: Vec<f64> = string_prices
+                        .iter()
+                        .filter_map(|p| p.parse::<f64>().ok())
+                        .collect();
+                    if !parsed.is_empty() {
+                        return Some(parsed);
+                    }
+                }
+                // Fallback: try parsing as Vec<f64> directly
+                serde_json::from_str(s).ok()
+            })
             .unwrap_or_default();
 
         // Parse token IDs
