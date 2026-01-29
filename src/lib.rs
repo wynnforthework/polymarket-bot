@@ -24,6 +24,7 @@ pub mod model;
 pub mod monitor;
 pub mod notify;
 pub mod risk;
+pub mod sentiment;
 pub mod storage;
 pub mod strategy;
 pub mod telegram;
