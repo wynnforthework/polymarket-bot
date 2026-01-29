@@ -136,3 +136,4 @@ impl SignalGenerator {
     }
 }
 pub mod realtime;
+pub mod take_profit;
