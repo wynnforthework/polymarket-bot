@@ -1,5 +1,12 @@
 //! Monitoring and alerting
 
+pub mod market_state;
+
+pub use market_state::{
+    MarketStateMonitor, MarketStateConfig, MarketState, VolatilityRegime,
+    TradingRecommendation, Alert, AlertType, AlertSeverity, Anomaly, AnomalyType
+};
+
 #[cfg(test)]
 mod tests;
 
