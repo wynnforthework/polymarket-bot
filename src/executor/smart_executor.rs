@@ -197,7 +197,10 @@ impl SmartExecutor {
             }
 
             if attempt < self.config.max_retries {
-                let delay = self.config.retry_delay_ms * (1 << (attempt - 1)); // Exponential backoff
+                // Exponential backoff with overflow protection (max 8x multiplier)
+                let shift = (attempt - 1).min(3) as u32;
+                let multiplier = 1u64 << shift;
+                let delay = self.config.retry_delay_ms.saturating_mul(multiplier);
                 sleep(Duration::from_millis(delay)).await;
             }
         }
