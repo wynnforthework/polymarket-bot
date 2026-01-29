@@ -10,6 +10,7 @@ use rust_decimal::Decimal;
 use serde::Serialize;
 
 /// Telegram notifier
+#[derive(Clone)]
 pub struct Notifier {
     http: Client,
     bot_token: String,
@@ -44,8 +45,18 @@ impl Notifier {
         }
     }
 
-    /// Send a raw message
+    /// Send a raw message (HTML format)
     pub async fn send(&self, text: &str) -> Result<()> {
+        self.send_with_format(text, "HTML").await
+    }
+
+    /// Send a raw message (Markdown format)
+    pub async fn send_raw(&self, text: &str) -> Result<()> {
+        self.send_with_format(text, "Markdown").await
+    }
+
+    /// Send a message with specific parse mode
+    async fn send_with_format(&self, text: &str, parse_mode: &str) -> Result<()> {
         if !self.enabled {
             return Ok(());
         }
@@ -58,7 +69,7 @@ impl Notifier {
         let msg = TelegramMessage {
             chat_id: self.chat_id.clone(),
             text: text.to_string(),
-            parse_mode: "HTML".to_string(),
+            parse_mode: parse_mode.to_string(),
         };
 
         let response = self.http.post(&url).json(&msg).send().await?;

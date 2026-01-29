@@ -1,6 +1,16 @@
 //! Trading strategy implementation
 
+pub mod compound;
+pub mod copy_trade;
 pub mod crypto_hf;
+
+#[cfg(test)]
+mod tests;
+#[cfg(test)]
+mod compound_tests;
+
+pub use compound::CompoundStrategy;
+pub use copy_trade::{CopyTrader, CopySignal, TopTrader, CopyTradeConfig};
 
 use crate::config::{RiskConfig, StrategyConfig};
 use crate::model::Prediction;

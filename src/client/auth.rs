@@ -9,6 +9,7 @@ use ethers::types::{Address, H256, U256};
 use ethers::utils::keccak256;
 
 /// Signer for Polymarket API authentication
+#[derive(Clone)]
 pub struct PolySigner {
     wallet: LocalWallet,
     chain_id: u64,

@@ -12,6 +12,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// CLOB API client for trading operations
+#[derive(Clone)]
 pub struct ClobClient {
     pub http: Client,
     base_url: String,

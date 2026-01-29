@@ -46,10 +46,12 @@ chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
 
 # Utilities
-rust_decimal = { version = "1.37", features = ["serde"] }
+rust_decimal = { version = "1.37", features = ["serde", "maths"] }
+rust_decimal_macros = "1.37"
 async-trait = "0.1"
 shellexpand = "3.1"
 uuid = { version = "1.11", features = ["v4", "serde"] }
+rand = "0.9.2"
 
 [dev-dependencies]
 tokio-test = "0.4"
@@ -58,3 +60,4 @@ mockall = "0.13"
 [[bin]]
 name = "polymarket-bot"
 path = "src/main.rs"
+rand = "0.8"

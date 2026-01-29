@@ -8,11 +8,22 @@ use polymarket_bot::{
     client::PolymarketClient,
     config::Config,
     executor::Executor,
+    ingester::{
+        processor::SignalProcessor,
+        telegram::TelegramBotSource,
+        twitter::{TwitterSource, TwitterRssSource},
+        source::SourceAggregator,
+        ParsedSignal, RawSignal, SignalSource,
+    },
     model::{EnsembleModel, LlmModel, ProbabilityModel},
     monitor::Monitor,
     notify::Notifier,
     storage::Database,
-    strategy::SignalGenerator,
+    strategy::{
+        SignalGenerator,
+        copy_trade::{CopyTrader, TopTrader},
+        compound::CompoundStrategy,
+    },
     telegram::{TelegramBot, CommandHandler, BotCommand},
 };
 use rust_decimal::Decimal;
@@ -105,7 +116,13 @@ async fn run_bot(config: Config, dry_run: bool) -> anyhow::Result<()> {
 
     // Initialize components
     let client = Arc::new(PolymarketClient::new(config.polymarket.clone()).await?);
-    client.clob.initialize().await?;
+    
+    // Skip CLOB auth in dry-run mode (not needed for reading markets)
+    if !dry_run {
+        client.clob.initialize().await?;
+    } else {
+        tracing::info!("Skipping CLOB authentication in dry-run mode");
+    }
 
     let db = Arc::new(Database::connect(&config.database.path).await?);
     let monitor = Monitor::new(1000);
@@ -135,8 +152,15 @@ async fn run_bot(config: Config, dry_run: bool) -> anyhow::Result<()> {
     // Initialize model
     let mut model = EnsembleModel::new();
     if let Some(llm_config) = &config.llm {
-        let llm = LlmModel::anthropic(llm_config.api_key.clone());
-        model.add_model(Box::new(llm), Decimal::new(70, 2)); // 70% weight
+        match LlmModel::from_config(llm_config) {
+            Ok(llm) => {
+                tracing::info!("LLM model initialized: {}", llm.name());
+                model.add_model(Box::new(llm), Decimal::new(70, 2)); // 70% weight
+            }
+            Err(e) => {
+                tracing::warn!("Failed to initialize LLM model: {}", e);
+            }
+        }
     }
 
     // Initialize strategy
@@ -146,6 +170,242 @@ async fn run_bot(config: Config, dry_run: bool) -> anyhow::Result<()> {
     let notifier = Arc::new(notifier);
 
     tracing::info!("Bot initialized. Starting main loop...");
+
+    // ========== Signal Ingester Pipeline ==========
+    // Spawn the external signal ingestion system if configured
+    let (parsed_signal_tx, mut parsed_signal_rx) = mpsc::channel::<ParsedSignal>(100);
+    
+    if let Some(ingester_config) = &config.ingester {
+        if ingester_config.enabled {
+            tracing::info!("Starting signal ingester pipeline...");
+            
+            // Raw signal channel
+            let (raw_tx, raw_rx) = mpsc::channel::<RawSignal>(500);
+            
+            // Start signal sources
+            if let Some(tg_bot_config) = &ingester_config.telegram_bot {
+                let source = TelegramBotSource::new(
+                    tg_bot_config.bot_token.clone(),
+                    tg_bot_config.channels.clone(),
+                );
+                let tx = raw_tx.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = source.run(tx).await {
+                        tracing::error!("Telegram bot source error: {}", e);
+                    }
+                });
+                tracing::info!("Telegram bot source started");
+            }
+            
+            if let Some(twitter_config) = &ingester_config.twitter {
+                if twitter_config.bearer_token.is_some() {
+                    let source = TwitterSource::new(
+                        polymarket_bot::ingester::TwitterIngesterConfig {
+                            bearer_token: twitter_config.bearer_token.clone(),
+                            watch_users: twitter_config.user_ids.clone(),
+                            keywords: twitter_config.keywords.clone(),
+                        },
+                        ingester_config.author_trust.clone(),
+                    );
+                    let tx = raw_tx.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = source.run(tx).await {
+                            tracing::error!("Twitter source error: {}", e);
+                        }
+                    });
+                    tracing::info!("Twitter API source started");
+                } else if let Some(nitter) = &twitter_config.nitter_instance {
+                    // Use RSS fallback
+                    let source = TwitterRssSource::new(
+                        nitter.clone(),
+                        twitter_config.user_ids.clone(),
+                        twitter_config.keywords.clone(),
+                    );
+                    let tx = raw_tx.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = source.run(tx).await {
+                            tracing::error!("Twitter RSS source error: {}", e);
+                        }
+                    });
+                    tracing::info!("Twitter RSS source started (via {})", nitter);
+                }
+            }
+            
+            // Start signal processor
+            if let Some(llm_config) = &config.llm {
+                let processor = SignalProcessor::new(llm_config.clone())
+                    .with_thresholds(
+                        ingester_config.processing.min_confidence,
+                        ingester_config.processing.min_agg_score,
+                    )
+                    .with_window(ingester_config.processing.aggregation_window_secs);
+                
+                let parsed_tx = parsed_signal_tx.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = processor.run(raw_rx, parsed_tx).await {
+                        tracing::error!("Signal processor error: {}", e);
+                    }
+                });
+                tracing::info!("Signal processor started");
+            }
+        }
+    }
+    
+    // Spawn parsed signal handler (trades based on external signals)
+    {
+        let notifier_for_signals = notifier.clone();
+        let executor_for_signals = executor.clone();
+        let db_for_signals = db.clone();
+        let dry_run_mode = dry_run;
+        
+        tokio::spawn(async move {
+            while let Some(signal) = parsed_signal_rx.recv().await {
+                tracing::info!(
+                    "📊 Received aggregated signal: {} {:?} (score: {:.2}, conf: {:.2})",
+                    signal.token,
+                    signal.direction,
+                    signal.agg_score,
+                    signal.confidence
+                );
+                
+                // TODO: Map external signals to Polymarket markets
+                // For now, just notify about high-confidence signals
+                if signal.agg_score >= 0.7 {
+                    let msg = format!(
+                        "🎯 *High Confidence Signal*\n\n\
+                        Token: `{}`\n\
+                        Direction: {:?}\n\
+                        Score: {:.0}%\n\
+                        Confidence: {:.0}%\n\
+                        Timeframe: {}\n\
+                        Sources: {}\n\n\
+                        Reasoning: {}",
+                        signal.token,
+                        signal.direction,
+                        signal.agg_score * 100.0,
+                        signal.confidence * 100.0,
+                        signal.timeframe,
+                        signal.sources.len(),
+                        signal.reasoning
+                    );
+                    
+                    let _ = notifier_for_signals.send_raw(&msg).await;
+                    
+                    // TODO: Execute trade when we can map signals to markets
+                    // if !dry_run_mode {
+                    //     if let Ok(Some(trade)) = executor_for_signals.execute_external_signal(&signal).await {
+                    //         let _ = notifier_for_signals.trade_executed(&trade, &signal.token).await;
+                    //     }
+                    // }
+                }
+            }
+        });
+    }
+
+    // ========== Copy Trading ==========
+    // Follow top traders' positions
+    if let Some(copy_config) = &config.copy_trade {
+        if copy_config.enabled {
+            tracing::info!("Starting copy trading module...");
+            
+            let mut copy_trader = CopyTrader::new()
+                .with_copy_ratio(copy_config.copy_ratio);
+            
+            // Add traders to follow
+            for username in &copy_config.follow_users {
+                let trader = TopTrader {
+                    username: username.clone(),
+                    address: None,  // Will be resolved
+                    win_rate: 0.7,  // Assume good until we analyze
+                    total_profit: Decimal::ZERO,
+                    weight: 1.0,
+                    updated_at: chrono::Utc::now(),
+                };
+                copy_trader.add_trader(trader);
+                tracing::info!("Following trader: @{}", username);
+            }
+            
+            // Add addresses to follow
+            for address in &copy_config.follow_addresses {
+                let trader = TopTrader {
+                    username: format!("{}...", &address[..8]),
+                    address: Some(address.clone()),
+                    win_rate: 0.6,
+                    total_profit: Decimal::ZERO,
+                    weight: 1.0,
+                    updated_at: chrono::Utc::now(),
+                };
+                copy_trader.add_trader(trader);
+                tracing::info!("Following address: {}", address);
+            }
+            
+            let executor_for_copy = executor.clone();
+            let notifier_for_copy = notifier.clone();
+            let delay_secs = copy_config.delay_secs;
+            let dry_run_copy = dry_run;
+            
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(30));
+                
+                loop {
+                    interval.tick().await;
+                    
+                    match copy_trader.check_for_signals().await {
+                        Ok(signals) => {
+                            for signal in signals {
+                                tracing::info!(
+                                    "📋 Copy signal from @{}: {} {}",
+                                    signal.trader.username,
+                                    match signal.side { 
+                                        polymarket_bot::types::Side::Buy => "BUY",
+                                        polymarket_bot::types::Side::Sell => "SELL",
+                                    },
+                                    signal.market_id
+                                );
+                                
+                                // Delay before copying
+                                if delay_secs > 0 {
+                                    tokio::time::sleep(Duration::from_secs(delay_secs)).await;
+                                }
+                                
+                                // Notify about copy signal
+                                let msg = format!(
+                                    "📋 *Copy Trade Signal*\n\n\
+                                    Trader: @{}\n\
+                                    Market: `{}`\n\
+                                    Side: {}\n\
+                                    Their Size: ${:.2}\n\
+                                    Our Size: ${:.2}",
+                                    signal.trader.username,
+                                    signal.market_id,
+                                    match signal.side {
+                                        polymarket_bot::types::Side::Buy => "BUY",
+                                        polymarket_bot::types::Side::Sell => "SELL",
+                                    },
+                                    signal.trader_size,
+                                    signal.suggested_size
+                                );
+                                let _ = notifier_for_copy.send_raw(&msg).await;
+                                
+                                // TODO: Execute copy trade
+                                // if !dry_run_copy {
+                                //     let market_signal = signal.to_signal(Decimal::new(50, 2));
+                                //     if let Ok(Some(trade)) = executor_for_copy.execute(&market_signal, balance).await {
+                                //         let _ = notifier_for_copy.trade_executed(&trade, &signal.market_id).await;
+                                //     }
+                                // }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("Copy trader error: {}", e);
+                        }
+                    }
+                }
+            });
+            
+            tracing::info!("Copy trading module started");
+        }
+    }
 
     // Spawn daily report task
     if tg_config.as_ref().map(|c| c.notify_daily).unwrap_or(false) {
@@ -186,16 +446,20 @@ async fn run_bot(config: Config, dry_run: bool) -> anyhow::Result<()> {
             continue;
         }
 
-        // Get portfolio value
-        let balance = match executor.clob.get_balance().await {
-            Ok(b) => b,
-            Err(e) => {
-                tracing::error!("Failed to get balance: {}", e);
-                if tg_config.as_ref().map(|c| c.notify_errors).unwrap_or(false) {
-                    let _ = notifier.error("Balance fetch", &e.to_string()).await;
+        // Get portfolio value (use simulated balance in dry-run mode)
+        let balance = if dry_run {
+            Decimal::new(1000, 0)  // $1000 simulated balance
+        } else {
+            match executor.clob.get_balance().await {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::error!("Failed to get balance: {}", e);
+                    if tg_config.as_ref().map(|c| c.notify_errors).unwrap_or(false) {
+                        let _ = notifier.error("Balance fetch", &e.to_string()).await;
+                    }
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    continue;
                 }
-                tokio::time::sleep(Duration::from_secs(60)).await;
-                continue;
             }
         };
 
@@ -343,7 +607,7 @@ async fn analyze_market(config: Config, market_id: &str) -> anyhow::Result<()> {
     // Run model if configured
     if let Some(llm_config) = &config.llm {
         println!("\n🤖 Running LLM analysis...\n");
-        let llm = LlmModel::anthropic(llm_config.api_key.clone());
+        let llm = LlmModel::from_config(llm_config)?;
         match llm.predict(&market).await {
             Ok(pred) => {
                 println!("Model Probability: {:.1}%", pred.probability * Decimal::ONE_HUNDRED);

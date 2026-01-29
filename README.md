@@ -1,16 +1,34 @@
 # Polymarket Trading Bot 🎲
 
-A Rust-based automated trading system for Polymarket prediction markets.
+A Rust-based automated trading system for Polymarket prediction markets with signal analysis, copy trading, and compound growth strategies.
 
 ## Features
 
-- **Probability Modeling**: Uses Claude/GPT to analyze markets and estimate "true" probabilities
+### Core Trading
+- **Probability Modeling**: Uses DeepSeek/Claude/GPT to analyze markets and estimate probabilities
 - **Signal Generation**: Compares model predictions vs market prices to find edge
-- **Kelly Criterion**: Optimal position sizing based on edge and confidence
-- **Risk Management**: Daily loss limits, position limits, exposure caps
-- **Real-time Data**: WebSocket streaming for live price updates
-- **Trade Execution**: Full CLOB integration for order placement
-- **Performance Tracking**: SQLite storage for trade history and analytics
+- **Kelly Criterion**: Dynamic position sizing based on edge, confidence, and recent performance
+- **Risk Management**: Daily loss limits, position limits, exposure caps, drawdown protection
+
+### Signal Ingestion
+- **Telegram Monitoring**: Monitor alpha channels for market signals
+- **Twitter/X Integration**: Follow KOLs for market insights
+- **LLM Signal Extraction**: Automatically extract trading signals from text
+
+### Copy Trading
+- **Follow Top Traders**: Automatically copy positions from successful traders
+- **Configurable Ratio**: Copy 10-100% of their position size
+- **Delay Execution**: Avoid detection with configurable delays
+
+### Compound Growth
+- **Dynamic Kelly**: Increase sizing on win streaks (up to 2x), reduce on losses (down to 0.5x)
+- **Sqrt Scaling**: Balance growth with risk (4x balance → 2x sizing)
+- **Drawdown Protection**: Auto-reduce positions at -10% and -20% drawdown
+
+### Analysis
+- **Pattern Recognition**: Identify successful trading patterns
+- **Trader Profiling**: Categorize traders by style (Contrarian, Scalper, Whale, etc.)
+- **Strategy Extraction**: Learn from high performers
 
 ## Architecture
 
@@ -18,121 +36,129 @@ A Rust-based automated trading system for Polymarket prediction markets.
 ┌─────────────────────────────────────────────────────────────┐
 │                   Polymarket Trading Bot                    │
 ├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
-│  │   Data      │───>│  Strategy   │───>│  Executor   │     │
-│  │  (Client)   │    │  (Model)    │    │  (Risk)     │     │
-│  └─────────────┘    └─────────────┘    └─────────────┘     │
+│                                                             │
+│  Ingester (TG/X)  ──→  LLM Processor  ──┐                  │
+│                                          ↓                  │
+│  Copy Trader  ──────────────────────→  Strategy            │
+│                                          ↓                  │
+│  Market Scanner  ──→  LLM Analyzer  ──→  Signal Gen        │
+│                                          ↓                  │
+│                                      Executor ──→ Notify   │
+│                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Installation
+## Quick Start
 
 ```bash
-# Clone the repo
-git clone https://github.com/yourusername/polymarket-bot
-cd polymarket-bot
-
 # Build
 cargo build --release
 
-# Copy and edit config
-cp config.example.toml config.toml
-# Edit config.toml with your keys
+# Configure
+cp .env.example .env
+# Edit .env with your keys
+
+# Run
+./start.sh
 ```
 
 ## Configuration
 
-Create `config.toml`:
+### Environment Variables (.env)
+
+```bash
+DEEPSEEK_API_KEY=sk-xxx
+TELEGRAM_BOT_TOKEN=123456:ABC-xxx
+TELEGRAM_CHAT_ID=your_chat_id
+POLYMARKET_PRIVATE_KEY=your_wallet_private_key
+```
+
+### Main Config (config.toml)
 
 ```toml
-[polymarket]
-clob_url = "https://clob.polymarket.com"
-gamma_url = "https://gamma-api.polymarket.com"
-private_key = "YOUR_PRIVATE_KEY"  # Without 0x prefix
-chain_id = 137  # Polygon mainnet
+[llm]
+provider = "deepseek"
+api_key = "${DEEPSEEK_API_KEY}"
+model = "deepseek-chat"
 
 [strategy]
-min_edge = 0.10        # 10% minimum edge
-min_confidence = 0.60  # 60% confidence threshold
-kelly_fraction = 0.25  # Quarter Kelly
+min_edge = 0.06          # 6% minimum edge
+min_confidence = 0.60    # 60% confidence threshold
+kelly_fraction = 0.35    # 35% Kelly
+compound_enabled = true  # Enable compound growth
 
 [risk]
-max_position_pct = 0.05    # 5% max per position
-max_exposure_pct = 0.50    # 50% max total exposure
-max_daily_loss_pct = 0.10  # 10% daily loss limit
+max_position_pct = 0.08  # 8% max per position
+max_exposure_pct = 0.60  # 60% max total
+max_daily_loss_pct = 0.12
 
-[database]
-path = "data/polymarket.db"
+[copy_trade]
+enabled = true
+follow_users = ["CRYINGLITTLEBABY"]
+copy_ratio = 0.5         # 50% of their size
+delay_secs = 30
 
-[llm]
-provider = "anthropic"
-api_key = "YOUR_ANTHROPIC_KEY"
-model = "claude-sonnet-4-20250514"
+[telegram]
+bot_token = "${TELEGRAM_BOT_TOKEN}"
+chat_id = "${TELEGRAM_CHAT_ID}"
 ```
 
 ## Usage
 
 ```bash
-# Run the trading bot
-./polymarket-bot run
+# Run trading bot
+./target/release/polymarket-bot run
 
-# Run in dry-run mode (no actual trades)
-./polymarket-bot run --dry-run
+# Dry run mode
+./target/release/polymarket-bot run --dry-run
 
-# View top markets
-./polymarket-bot markets --limit 20
+# View markets
+./target/release/polymarket-bot markets
 
-# Analyze a specific market
-./polymarket-bot analyze <market_id>
+# Analyze a market
+./target/release/polymarket-bot analyze <market_id>
 
-# Check account status
-./polymarket-bot status
+# Check status
+./target/release/polymarket-bot status
 ```
 
 ## Project Structure
 
 ```
 src/
-├── main.rs          # CLI entry point
-├── lib.rs           # Library exports
-├── types.rs         # Core types (Market, Order, Signal)
-├── error.rs         # Error definitions
-├── config.rs        # Configuration management
-├── client/          # Polymarket API clients
-│   ├── auth.rs      # EIP-712 signing
-│   ├── clob.rs      # Order book API
-│   ├── gamma.rs     # Market data API
-│   └── websocket.rs # Real-time streaming
-├── model/           # Probability models
-│   ├── llm.rs       # Claude/GPT analysis
-│   └── sentiment.rs # Sentiment analysis
-├── strategy/        # Trading strategy
-│   └── mod.rs       # Signal generation + Kelly
-├── executor/        # Trade execution
-│   └── mod.rs       # Risk management
-├── monitor/         # Performance tracking
-└── storage/         # SQLite persistence
+├── main.rs              # CLI entry point
+├── lib.rs               # Library exports
+├── config.rs            # Configuration
+├── client/              # Polymarket API
+│   ├── clob.rs          # Order book
+│   ├── gamma.rs         # Market data
+│   └── websocket.rs     # Streaming
+├── model/               # Probability models
+│   └── llm.rs           # Multi-provider LLM
+├── strategy/            # Trading strategies
+│   ├── compound.rs      # Compound growth
+│   ├── copy_trade.rs    # Copy trading
+│   └── mod.rs           # Signal generation
+├── ingester/            # Signal collection
+│   ├── telegram.rs      # TG monitoring
+│   ├── twitter.rs       # X monitoring
+│   └── processor.rs     # LLM extraction
+├── analysis/            # Pattern recognition
+│   ├── pattern.rs       # Trading patterns
+│   └── trader_profile.rs
+├── executor/            # Trade execution
+├── notify/              # Notifications
+└── storage/             # Database
 ```
-
-## How It Works
-
-1. **Scan Markets**: Fetch active markets from Gamma API
-2. **Predict Probabilities**: Use LLM to estimate "true" probability
-3. **Find Edge**: Compare model vs market price
-4. **Generate Signal**: If edge > threshold, create trade signal
-5. **Size Position**: Use Kelly criterion for optimal sizing
-6. **Execute Trade**: Place order via CLOB API
-7. **Monitor**: Track performance and enforce risk limits
 
 ## Risk Warning ⚠️
 
 This bot trades real money. Use at your own risk.
 
 - Start with small amounts
-- Use dry-run mode extensively
-- Monitor the bot closely
-- Set conservative risk limits
-- The model can be wrong
+- Use dry-run mode first
+- Monitor closely
+- Set conservative limits
 
 ## License
 

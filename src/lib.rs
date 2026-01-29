@@ -1,15 +1,25 @@
 //! Polymarket Probability Trading Bot
 //! 
 //! A Rust-based automated trading system for Polymarket prediction markets.
+//! 
+//! ## Architecture
+//! 
+//! ```text
+//! Ingester (TG/X/Chain) → Processor (LLM) → Strategy → Executor → Notifier
+//!                                              ↑
+//!                            Analysis (Pattern Recognition, Copy Trade)
+//! ```
 
+pub mod analysis;
 pub mod client;
-pub mod model;
-pub mod strategy;
+pub mod config;
+pub mod error;
 pub mod executor;
+pub mod ingester;
+pub mod model;
 pub mod monitor;
 pub mod notify;
-pub mod telegram;
 pub mod storage;
-pub mod config;
+pub mod strategy;
+pub mod telegram;
 pub mod types;
-pub mod error;

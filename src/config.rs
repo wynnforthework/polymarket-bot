@@ -12,6 +12,108 @@ pub struct Config {
     pub database: DatabaseConfig,
     pub llm: Option<LlmConfig>,
     pub telegram: Option<TelegramConfig>,
+    pub ingester: Option<IngesterConfig>,
+    pub copy_trade: Option<CopyTradeConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CopyTradeConfig {
+    /// Enable copy trading
+    #[serde(default)]
+    pub enabled: bool,
+    /// Usernames to follow
+    #[serde(default)]
+    pub follow_users: Vec<String>,
+    /// Wallet addresses to follow
+    #[serde(default)]
+    pub follow_addresses: Vec<String>,
+    /// Copy ratio (0.0 - 1.0)
+    #[serde(default = "default_copy_ratio")]
+    pub copy_ratio: f64,
+    /// Delay before copying (seconds)
+    #[serde(default)]
+    pub delay_secs: u64,
+}
+
+fn default_copy_ratio() -> f64 {
+    0.5
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct IngesterConfig {
+    /// Enable signal ingestion
+    #[serde(default)]
+    pub enabled: bool,
+    /// Telegram userbot configuration
+    pub telegram_userbot: Option<TelegramUserbotConfig>,
+    /// Telegram bot configuration (for public channels)
+    pub telegram_bot: Option<TelegramBotIngesterConfig>,
+    /// Twitter/X configuration
+    pub twitter: Option<TwitterConfig>,
+    /// Signal processing settings
+    #[serde(default)]
+    pub processing: ProcessingConfig,
+    /// Author trust scores
+    #[serde(default)]
+    pub author_trust: std::collections::HashMap<String, f64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TelegramUserbotConfig {
+    /// Telegram API ID
+    pub api_id: i32,
+    /// Telegram API Hash
+    pub api_hash: String,
+    /// Session file path
+    pub session_file: String,
+    /// Chat IDs to monitor
+    pub watch_chats: Vec<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TelegramBotIngesterConfig {
+    /// Bot token (can reuse from telegram config)
+    pub bot_token: String,
+    /// Channel usernames to monitor
+    pub channels: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TwitterConfig {
+    /// Twitter API bearer token
+    pub bearer_token: Option<String>,
+    /// User IDs to monitor
+    pub user_ids: Vec<String>,
+    /// Keywords to filter
+    #[serde(default)]
+    pub keywords: Vec<String>,
+    /// Nitter instance for RSS fallback
+    pub nitter_instance: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct ProcessingConfig {
+    /// Aggregation window in seconds
+    #[serde(default = "default_aggregation_window")]
+    pub aggregation_window_secs: i64,
+    /// Minimum confidence to process signal
+    #[serde(default = "default_min_confidence")]
+    pub min_confidence: f64,
+    /// Minimum aggregate score to emit
+    #[serde(default = "default_min_agg_score")]
+    pub min_agg_score: f64,
+}
+
+fn default_aggregation_window() -> i64 {
+    300 // 5 minutes
+}
+
+fn default_min_confidence() -> f64 {
+    0.5
+}
+
+fn default_min_agg_score() -> f64 {
+    0.6
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -42,6 +144,12 @@ pub struct StrategyConfig {
     pub scan_interval_secs: u64,
     /// Model update interval in seconds
     pub model_update_interval_secs: u64,
+    /// Enable compound growth strategy
+    #[serde(default)]
+    pub compound_enabled: bool,
+    /// Use sqrt scaling for compound growth (safer)
+    #[serde(default = "default_true")]
+    pub compound_sqrt_scaling: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -66,12 +174,15 @@ pub struct DatabaseConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct LlmConfig {
-    /// LLM provider (anthropic, openai)
+    /// LLM provider: deepseek, anthropic, openai, ollama, compatible
     pub provider: String,
-    /// API key
+    /// API key (not required for ollama)
+    #[serde(default)]
     pub api_key: String,
-    /// Model name
-    pub model: String,
+    /// Model name (optional, uses provider default)
+    pub model: Option<String>,
+    /// Base URL for OpenAI-compatible APIs
+    pub base_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -129,11 +240,13 @@ impl Config {
 impl Default for StrategyConfig {
     fn default() -> Self {
         Self {
-            min_edge: Decimal::new(10, 2),       // 10%
+            min_edge: Decimal::new(6, 2),        // 6%
             min_confidence: Decimal::new(60, 2), // 60%
-            kelly_fraction: Decimal::new(25, 2), // 25% Kelly
-            scan_interval_secs: 60,
-            model_update_interval_secs: 3600,
+            kelly_fraction: Decimal::new(35, 2), // 35% Kelly
+            scan_interval_secs: 180,
+            model_update_interval_secs: 900,
+            compound_enabled: true,
+            compound_sqrt_scaling: true,
         }
     }
 }
