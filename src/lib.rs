@@ -15,6 +15,7 @@
 pub mod analysis;
 pub mod client;
 pub mod config;
+pub mod data;
 pub mod error;
 pub mod executor;
 pub mod ingester;
