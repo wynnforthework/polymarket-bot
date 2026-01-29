@@ -1,7 +1,14 @@
 //! Trade execution and risk management
 
+pub mod smart_executor;
+pub mod gradual_exit;
+
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod smart_executor_tests;
+#[cfg(test)]
+mod gradual_exit_tests;
 
 use crate::client::ClobClient;
 use crate::config::RiskConfig;

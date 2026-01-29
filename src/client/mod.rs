@@ -5,14 +5,14 @@
 //! - Gamma API: Market data and information
 //! - WebSocket: Real-time price updates
 
-mod clob;
+pub mod clob;
 mod gamma;
 mod auth;
 mod websocket;
 #[cfg(test)]
 mod tests;
 
-pub use clob::ClobClient;
+pub use clob::{ClobClient, OrderBook, OrderBookLevel};
 pub use gamma::GammaClient;
 pub use auth::PolySigner;
 pub use websocket::MarketStream;
