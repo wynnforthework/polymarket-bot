@@ -1,5 +1,8 @@
 //! Data storage and persistence
 
+#[cfg(test)]
+mod tests;
+
 use crate::error::Result;
 use crate::monitor::PerformanceStats;
 use crate::types::Trade;

@@ -28,3 +28,5 @@ pub mod types;
 mod types_tests;
 #[cfg(test)]
 mod config_tests;
+#[cfg(test)]
+mod error_tests;

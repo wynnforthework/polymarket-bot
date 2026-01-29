@@ -9,6 +9,8 @@ mod clob;
 mod gamma;
 mod auth;
 mod websocket;
+#[cfg(test)]
+mod tests;
 
 pub use clob::ClobClient;
 pub use gamma::GammaClient;

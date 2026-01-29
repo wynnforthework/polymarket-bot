@@ -1,5 +1,8 @@
 //! Monitoring and alerting
 
+#[cfg(test)]
+mod tests;
+
 use rust_decimal::Decimal;
 use std::collections::VecDeque;
 use tokio::sync::RwLock;
