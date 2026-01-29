@@ -553,7 +553,22 @@ async fn run_bot(config: Config, dry_run: bool) -> anyhow::Result<()> {
                     let _ = notifier.signal_found(&signal, &market.question).await;
                 }
 
-                if !dry_run {
+                if dry_run {
+                    // Simulate trade in dry-run mode
+                    let sim_size = signal.suggested_size * balance;
+                    let potential_profit = sim_size * signal.edge;
+                    tracing::info!(
+                        "📝 SIMULATED: Would {} ${:.2} on {} @ {:.1}% (potential: ${:.2})",
+                        match signal.side {
+                            polymarket_bot::types::Side::Buy => "BUY",
+                            polymarket_bot::types::Side::Sell => "SELL",
+                        },
+                        sim_size,
+                        market.question.chars().take(40).collect::<String>(),
+                        signal.market_probability * Decimal::ONE_HUNDRED,
+                        potential_profit
+                    );
+                } else {
                     match executor.execute(&signal, balance).await {
                         Ok(Some(trade)) => {
                             tracing::info!("Trade executed: {}", trade.id);
