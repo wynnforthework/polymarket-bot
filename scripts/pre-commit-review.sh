@@ -4,6 +4,9 @@
 
 set -e
 
+# Ensure cargo is in PATH
+export PATH="$HOME/.cargo/bin:$PATH"
+
 echo "🔍 Pre-commit Review Starting..."
 
 # 1. Compile check
