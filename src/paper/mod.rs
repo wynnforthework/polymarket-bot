@@ -8,7 +8,7 @@ mod trader;
 mod evaluator;
 
 pub use position::{Position, PositionSide, PositionStatus};
-pub use trader::{PaperTrader, PaperTraderConfig, TradeRecord};
+pub use trader::{PaperTrader, PaperTraderConfig, TradeRecord, TradeAction};
 pub use evaluator::{MarketEvaluator, EvaluationResult, ConfidenceLevel};
 
 use rust_decimal::Decimal;
