@@ -1,5 +1,20 @@
 # 🎲 Polymarket Trading Bot
 
+> ⚠️ **DISCLAIMER: FOR RESEARCH PURPOSES ONLY**
+> 
+> This project is strictly for educational and research purposes. Users are solely responsible for compliance with all applicable laws and regulations in their jurisdiction. The authors assume no liability for any legal, financial, or other consequences arising from the use of this software.
+> 
+> **如果您觉得本研究项目有价值，欢迎赞助支持：**
+> 
+> | Network | Address |
+> |---------|---------|
+> | EVM (ETH/Polygon/BSC) | `0x5b8A5c95e3C74b6673cAda74649264242EbEe077` |
+> | Solana | `3gxSjqv154cDysYuoMxUcMMZ1wnGFDtLnT21w3xueiuf` |
+> | TRON | `TQL1dgCxMUYiqnhYL5VSzKZCdsXTdzeJ7S` |
+> | Bitcoin | `bc1qrngacl69znhujy6m83cpzsyf5j9lzdd5qdxenv` |
+
+---
+
 [![Rust](https://img.shields.io/badge/rust-1.75+-orange.svg)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-324%20passing-green.svg)]()
