@@ -177,7 +177,7 @@ impl NegativeRiskScanner {
             let yes_token_id = &token_ids[0];
 
             // Get orderbook for Yes token
-            let book = match self.clob.get_orderbook(yes_token_id).await {
+            let book = match self.clob.get_order_book(yes_token_id).await {
                 Ok(b) => b,
                 Err(_) => continue,
             };

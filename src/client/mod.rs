@@ -18,7 +18,7 @@ mod tests;
 pub use clob::{ClobClient, OrderBook, OrderBookLevel};
 pub use gamma::{GammaClient, CRYPTO_SERIES, CRYPTO_SEARCH_QUERIES};
 pub use auth::PolySigner;
-pub use websocket::MarketStream;
+pub use websocket::{MarketStream, MarketUpdate};
 pub use orderbook_stream::{OrderBookManager, OrderBookUpdate, LocalOrderBook};
 
 use crate::config::PolymarketConfig;

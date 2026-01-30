@@ -167,20 +167,19 @@ impl ContinuousScanner {
                 continue; // Need Yes and No tokens
             }
 
-            // Parse volume
-            let volume = market.volume.unwrap_or(dec!(0));
-            if volume < self.config.min_volume {
+            // Check volume
+            if market.volume < self.config.min_volume {
                 continue;
             }
 
             let info = MarketInfo {
                 condition_id: market.id.clone(),
                 question: market.question.clone(),
-                slug: market.slug.clone().unwrap_or_default(),
+                slug: market.id.clone(), // Use ID as slug since Market doesn't have slug
                 yes_token_id: market.outcomes[0].token_id.clone(),
                 no_token_id: market.outcomes[1].token_id.clone(),
-                volume,
-                active: true,
+                volume: market.volume,
+                active: market.active && !market.closed,
             };
 
             if !current.contains_key(&market.id) {
@@ -253,12 +252,12 @@ impl ContinuousScanner {
     /// Check a single market for arbitrage
     async fn check_market(&self, market: &MarketInfo) -> Result<Option<ArbitrageOpp>> {
         // Fetch order books
-        let yes_book = match self.clob.get_orderbook(&market.yes_token_id).await {
+        let yes_book = match self.clob.get_order_book(&market.yes_token_id).await {
             Ok(b) => b,
             Err(_) => return Ok(None),
         };
 
-        let no_book = match self.clob.get_orderbook(&market.no_token_id).await {
+        let no_book = match self.clob.get_order_book(&market.no_token_id).await {
             Ok(b) => b,
             Err(_) => return Ok(None),
         };

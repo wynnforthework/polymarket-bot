@@ -3,7 +3,7 @@
 //! Monitors price changes and immediately checks for arbitrage opportunities.
 
 use super::{ArbitrageOpp, OpportunitySender, ScannerConfig};
-use crate::client::websocket::{MarketStream, MarketUpdate};
+use crate::client::{MarketStream, MarketUpdate};
 use crate::error::Result;
 use chrono::Utc;
 use rust_decimal::Decimal;
