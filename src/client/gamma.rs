@@ -91,19 +91,30 @@ impl GammaClient {
             .ok_or_else(|| BotError::MarketNotFound(market_id.to_string()))
     }
 
-    /// Search markets by keyword
+    /// Search markets by keyword (fetches all active markets and filters locally)
     pub async fn search_markets(&self, query: &str) -> Result<Vec<Market>> {
         let url = format!("{}/markets", self.base_url);
         let resp: Vec<GammaMarket> = self
             .http
             .get(&url)
-            .query(&[("_q", query)])
+            .query(&[
+                ("active", "true"),
+                ("closed", "false"),
+                ("_limit", "500"),
+            ])
             .send()
             .await?
             .json()
             .await?;
 
-        Ok(resp.into_iter().filter_map(|m| self.parse_market(m)).collect())
+        let query_lower = query.to_lowercase();
+        Ok(resp.into_iter()
+            .filter_map(|m| self.parse_market(m))
+            .filter(|m| {
+                m.question.to_lowercase().contains(&query_lower)
+                    || m.id.to_lowercase().contains(&query_lower)
+            })
+            .collect())
     }
 
     /// Get markets by volume (top markets)

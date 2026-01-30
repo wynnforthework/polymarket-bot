@@ -1,6 +1,6 @@
 {
   "initial_balance": "1000",
-  "cash_balance": "999.9500000000000000000000000",
+  "cash_balance": "974.9500000000000000000000000",
   "positions": [
     {
       "id": "517310_1769752035881",
@@ -22,6 +22,27 @@
       "exit_time": "2026-01-30T05:47:29.370323920Z",
       "entry_reason": "CLI buy: 517310",
       "exit_reason": "CLI sell"
+    },
+    {
+      "id": "517310_1769752199093",
+      "market_id": "517310",
+      "question": "Will Trump deport less than 250,000?",
+      "token_id": "101676997363687199724245607342877036148401850938023978421879460310389391082353",
+      "side": "Yes",
+      "shares": "675.000675000675000675000675",
+      "entry_price": "0.037037",
+      "cost_basis": "25.000000000000000000000000000",
+      "current_price": "0.037037",
+      "current_value": "25.000000000000000000000000000",
+      "unrealized_pnl": "0",
+      "unrealized_pnl_pct": "0",
+      "exit_price": null,
+      "realized_pnl": null,
+      "status": "Open",
+      "entry_time": "2026-01-30T05:49:59.093596769Z",
+      "exit_time": null,
+      "entry_reason": "CLI buy: trump",
+      "exit_reason": null
     }
   ],
   "trade_history": [
@@ -50,8 +71,21 @@
       "pnl": "-0.050000000000000000000000000",
       "timestamp": "2026-01-30T05:47:29.370330063Z",
       "reason": "CLI sell"
+    },
+    {
+      "id": "517310_1769752199093",
+      "market_id": "517310",
+      "question": "Will Trump deport less than 250,000?",
+      "side": "Yes",
+      "action": "Buy",
+      "shares": "675.000675000675000675000675",
+      "price": "0.037037",
+      "total_value": "25",
+      "pnl": null,
+      "timestamp": "2026-01-30T05:49:59.093598466Z",
+      "reason": "CLI buy: trump"
     }
   ],
   "created_at": "2026-01-30T05:39:27.513594441Z",
-  "updated_at": "2026-01-30T05:47:29.370331248Z"
+  "updated_at": "2026-01-30T05:49:59.093600769Z"
 }
