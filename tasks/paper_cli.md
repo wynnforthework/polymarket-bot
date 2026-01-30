@@ -4,12 +4,12 @@
 命令行工具运行模拟交易，查看持仓和收益
 
 ## 任务拆分
-- [ ] Task 1: CLI 框架 + help 命令 (~3min)
-- [ ] Task 2: `status` 命令显示账户摘要 (~3min)
+- [x] Task 1: CLI 框架 + help 命令 (~3min) ✅
+- [x] Task 2: `status` 命令显示账户摘要 (~3min) ✅
 - [ ] Task 3: `buy` 命令模拟买入 (~4min)
 - [ ] Task 4: `sell` 命令模拟卖出 (~3min)
-- [ ] Task 5: `positions` 命令显示持仓 (~2min)
-- [ ] Task 6: `history` 命令显示交易记录 (~2min)
+- [x] Task 5: `positions` 命令显示持仓 (~2min) ✅
+- [x] Task 6: `history` 命令显示交易记录 (~2min) ✅
 
 ## 测试用例 (先写)
 - test_cli_help: 验证 help 输出

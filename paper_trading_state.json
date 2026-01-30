@@ -1,8 +1,57 @@
 {
   "initial_balance": "1000",
-  "cash_balance": "1000",
-  "positions": [],
-  "trade_history": [],
+  "cash_balance": "999.9500000000000000000000000",
+  "positions": [
+    {
+      "id": "517310_1769752035881",
+      "market_id": "517310",
+      "question": "Will Trump deport less than 250,000?",
+      "token_id": "101676997363687199724245607342877036148401850938023978421879460310389391082353",
+      "side": "Yes",
+      "shares": "1248.7512487512487512487512488",
+      "entry_price": "0.04004",
+      "cost_basis": "50.000000000000000000000000002",
+      "current_price": "0.04004",
+      "current_value": "50.000000000000000000000000002",
+      "unrealized_pnl": "0",
+      "unrealized_pnl_pct": "0",
+      "exit_price": "0.03999996",
+      "realized_pnl": "-0.050000000000000000000000000",
+      "status": "ClosedLoss",
+      "entry_time": "2026-01-30T05:47:15.881992163Z",
+      "exit_time": "2026-01-30T05:47:29.370323920Z",
+      "entry_reason": "CLI buy: 517310",
+      "exit_reason": "CLI sell"
+    }
+  ],
+  "trade_history": [
+    {
+      "id": "517310_1769752035881",
+      "market_id": "517310",
+      "question": "Will Trump deport less than 250,000?",
+      "side": "Yes",
+      "action": "Buy",
+      "shares": "1248.7512487512487512487512488",
+      "price": "0.04004",
+      "total_value": "50",
+      "pnl": null,
+      "timestamp": "2026-01-30T05:47:15.881992799Z",
+      "reason": "CLI buy: 517310"
+    },
+    {
+      "id": "517310_1769752035881_sell",
+      "market_id": "517310",
+      "question": "Will Trump deport less than 250,000?",
+      "side": "Yes",
+      "action": "Sell",
+      "shares": "1248.7512487512487512487512488",
+      "price": "0.03999996",
+      "total_value": "49.950000000000000000000000002",
+      "pnl": "-0.050000000000000000000000000",
+      "timestamp": "2026-01-30T05:47:29.370330063Z",
+      "reason": "CLI sell"
+    }
+  ],
   "created_at": "2026-01-30T05:39:27.513594441Z",
-  "updated_at": "2026-01-30T05:39:27.513602130Z"
+  "updated_at": "2026-01-30T05:47:29.370331248Z"
 }

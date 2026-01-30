@@ -160,6 +160,13 @@ impl PaperTrader {
             }
         };
 
+        // Validate price to avoid division by zero
+        if current_price <= dec!(0) || current_price >= dec!(1) {
+            return Err(BotError::Execution(format!(
+                "Invalid price {}: must be between 0 and 1", current_price
+            )));
+        }
+
         // Apply slippage (buy at slightly higher price)
         let slippage = current_price * self.config.slippage_pct / dec!(100);
         let execution_price = current_price + slippage;

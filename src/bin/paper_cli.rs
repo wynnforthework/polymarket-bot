@@ -8,9 +8,11 @@
 //! - history: Show trade history
 
 use clap::{Parser, Subcommand};
-use polymarket_bot::paper::{PaperTrader, PaperTraderConfig, PortfolioSummary};
+use polymarket_bot::paper::{PaperTrader, PaperTraderConfig, PortfolioSummary, PositionSide};
 use polymarket_bot::client::GammaClient;
+use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
+use std::str::FromStr;
 
 #[derive(Parser)]
 #[command(name = "paper")]
@@ -26,9 +28,12 @@ enum Commands {
     Status,
     /// Simulate buying shares in a market
     Buy {
-        /// Market ID or slug
+        /// Market ID (numeric) or search query
         #[arg(short, long)]
         market: String,
+        /// Use market ID directly instead of searching
+        #[arg(long)]
+        id: bool,
         /// Side: yes or no
         #[arg(short, long)]
         side: String,
@@ -62,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         initial_balance: dec!(1000),
         ..Default::default()
     };
-    let trader = PaperTrader::new(config, client);
+    let trader = PaperTrader::new(config, client.clone());
     
     // Try to load existing state
     let state_file = "paper_trading_state.json";
@@ -73,13 +78,89 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let summary = trader.get_summary().await;
             print_status(&summary);
         }
-        Commands::Buy { market, side, amount } => {
-            println!("Buy {} {} ${}", side, market, amount);
-            // TODO: Implement in Task 3
+        Commands::Buy { market, id, side, amount } => {
+            // Parse side
+            let position_side = match side.to_lowercase().as_str() {
+                "yes" | "y" => PositionSide::Yes,
+                "no" | "n" => PositionSide::No,
+                _ => {
+                    eprintln!("❌ Invalid side: {}. Use 'yes' or 'no'", side);
+                    return Ok(());
+                }
+            };
+            
+            // Get market by ID or search
+            let target_market = if id {
+                println!("🔍 Fetching market ID: {}", market);
+                match client.get_market(&market).await {
+                    Ok(m) => m,
+                    Err(e) => {
+                        eprintln!("❌ Market not found: {}", e);
+                        return Ok(());
+                    }
+                }
+            } else {
+                println!("🔍 Searching for market: {}", market);
+                let markets = client.search_markets(&market).await?;
+                
+                if markets.is_empty() {
+                    eprintln!("❌ No markets found for: {}", market);
+                    return Ok(());
+                }
+                
+                // Find best matching active market with valid prices
+                let found = markets.into_iter()
+                    .filter(|m| m.active && !m.closed)
+                    .filter(|m| m.outcomes.iter().any(|o| o.price > dec!(0) && o.price < dec!(1)))
+                    .next();
+                
+                match found {
+                    Some(m) => m,
+                    None => {
+                        eprintln!("❌ No valid active markets found for: {}", market);
+                        return Ok(());
+                    }
+                }
+            };
+            
+            let target_market = &target_market;
+            
+            println!("📊 Found: {}", target_market.question);
+            
+            // Show current prices
+            if let Some(yes_outcome) = target_market.outcomes.first() {
+                println!("   YES: {:.1}¢", yes_outcome.price * dec!(100));
+            }
+            if let Some(no_outcome) = target_market.outcomes.get(1) {
+                println!("   NO:  {:.1}¢", no_outcome.price * dec!(100));
+            }
+            
+            // Execute buy
+            let amount_dec = Decimal::from_str(&amount.to_string()).unwrap_or(dec!(0));
+            match trader.buy(target_market, position_side, amount_dec, format!("CLI buy: {}", market)).await {
+                Ok(position) => {
+                    println!("✅ Bought {} {} @ {:.4}", position.shares.round_dp(2), position.side, position.entry_price);
+                    println!("   Cost: ${:.2}", position.cost_basis);
+                    println!("   Position ID: {}", position.id);
+                }
+                Err(e) => {
+                    eprintln!("❌ Buy failed: {}", e);
+                }
+            }
         }
         Commands::Sell { position } => {
-            println!("Sell position {}", position);
-            // TODO: Implement in Task 4
+            match trader.sell(&position, "CLI sell".to_string()).await {
+                Ok(trade) => {
+                    let pnl = trade.pnl.unwrap_or(dec!(0));
+                    let emoji = if pnl >= dec!(0) { "✅" } else { "❌" };
+                    println!("{} Sold {} {} @ {:.4}", emoji, trade.shares.round_dp(2), trade.side, trade.price);
+                    println!("   Proceeds: ${:.2}", trade.total_value);
+                    println!("   P&L: ${:.2}", pnl);
+                }
+                Err(e) => {
+                    eprintln!("❌ Sell failed: {}", e);
+                }
+            }
         }
         Commands::Positions => {
             let positions = trader.get_open_positions().await;
@@ -192,10 +273,28 @@ mod tests {
             "--side", "yes",
             "--amount", "50"
         ]);
-        if let Commands::Buy { market, side, amount } = cli.command {
+        if let Commands::Buy { market, side, amount, id } = cli.command {
             assert_eq!(market, "btc-100k");
             assert_eq!(side, "yes");
             assert!((amount - 50.0).abs() < 0.01);
+            assert!(!id); // Default is false
+        } else {
+            panic!("Expected Buy command");
+        }
+    }
+
+    #[test]
+    fn test_cli_buy_with_id_flag() {
+        let cli = Cli::parse_from([
+            "paper", "buy", 
+            "--id",
+            "--market", "517310",
+            "--side", "yes",
+            "--amount", "50"
+        ]);
+        if let Commands::Buy { market, id, .. } = cli.command {
+            assert_eq!(market, "517310");
+            assert!(id);
         } else {
             panic!("Expected Buy command");
         }
