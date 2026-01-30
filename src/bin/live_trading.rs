@@ -13,6 +13,7 @@
 use chrono::{DateTime, Duration, Utc};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::Write;
 use tokio::time::{interval, Duration as TokioDuration};
@@ -100,6 +101,7 @@ struct LiveTrader {
     last_hour_reset: DateTime<Utc>,
     log_file: File,
     ml_predictor: MLPredictor,
+    traded_market_ids: HashSet<String>,  // Deduplication: prevent repeat trades on same market
 }
 
 impl LiveTrader {
@@ -129,6 +131,7 @@ impl LiveTrader {
             last_hour_reset: Utc::now(),
             log_file,
             ml_predictor,
+            traded_market_ids: HashSet::new(),
         })
     }
 
@@ -447,10 +450,79 @@ impl LiveTrader {
 
         self.capital -= amount;
         self.hourly_trade_count += 1;
+        self.traded_market_ids.insert(market.id.clone());  // Dedup: track traded markets
         self.trades.push(trade.clone());
         self.log_trade(&trade);
 
         trade
+    }
+
+    /// Check if a market has already been traded (deduplication)
+    fn already_traded(&self, market_id: &str) -> bool {
+        self.traded_market_ids.contains(market_id)
+    }
+
+    /// Check and update settlements for open trades
+    async fn check_settlements(&mut self) {
+        let mut settlements_to_process = Vec::new();
+
+        // Find trades that should have settled (based on market end time)
+        for (idx, trade) in self.trades.iter().enumerate() {
+            if matches!(trade.status, TradeStatus::Open) {
+                settlements_to_process.push((idx, trade.market_id.clone(), trade.side.clone(), trade.shares, trade.amount, trade.market_question.clone()));
+            }
+        }
+
+        for (idx, market_id, side, shares, amount, question) in settlements_to_process {
+            if let Ok(Some(resolution)) = self.fetch_market_resolution(&market_id).await {
+                // Determine if we won or lost
+                let won = match resolution.as_str() {
+                    "Yes" => side == "Yes",
+                    "No" => side == "No",
+                    _ => false,  // Unclear resolution
+                };
+
+                let (pnl, log_msg) = if won {
+                    // Won: payout is shares * $1
+                    let payout = shares;
+                    let pnl = payout - amount;
+                    self.capital += payout;
+                    (pnl, format!("✅ SETTLED WON: {} | PnL: ${:.2}", question.chars().take(40).collect::<String>(), pnl))
+                } else {
+                    // Lost: payout is $0
+                    let pnl = -amount;
+                    (pnl, format!("❌ SETTLED LOST: {} | PnL: ${:.2}", question.chars().take(40).collect::<String>(), pnl))
+                };
+
+                // Update trade
+                let trade = &mut self.trades[idx];
+                trade.pnl = Some(pnl);
+                trade.exit_price = Some(if won { 1.0 } else { 0.0 });
+                trade.status = if won { TradeStatus::Won } else { TradeStatus::Lost };
+
+                self.log(&log_msg);
+                self.log_trade(&self.trades[idx].clone());
+            }
+        }
+    }
+
+    /// Fetch market resolution from Polymarket API
+    async fn fetch_market_resolution(&self, market_id: &str) -> anyhow::Result<Option<String>> {
+        let url = format!("{}/markets/{}", GAMMA_API_URL, market_id);
+        let resp = self.http.get(&url).send().await?;
+        
+        if !resp.status().is_success() {
+            return Ok(None);
+        }
+
+        let market: serde_json::Value = resp.json().await?;
+        
+        // Check if market is resolved
+        if let Some(resolved_outcome) = market.get("resolvedOutcome").and_then(|v| v.as_str()) {
+            return Ok(Some(resolved_outcome.to_string()));
+        }
+        
+        Ok(None)
     }
 
     /// Main trading loop
@@ -467,6 +539,9 @@ impl LiveTrader {
 
         loop {
             interval.tick().await;
+
+            // Check settlements for open trades
+            self.check_settlements().await;
 
             // Check hourly limit
             if !self.check_hourly_limit() {
@@ -490,6 +565,12 @@ impl LiveTrader {
             let mut opportunities: Vec<(Market, String, f64, f64, ExtendedBinanceData)> = Vec::new();
 
             for market in &markets {
+                // DEDUP: Skip markets we've already traded
+                if self.already_traded(&market.id) {
+                    debug!("Skipping {} - already traded", market.question);
+                    continue;
+                }
+
                 // Skip markets not settling soon (within MAX_SETTLEMENT_MINUTES)
                 if let Some(end_date) = market.end_date {
                     let now = Utc::now();
@@ -630,6 +711,7 @@ mod tests {
             last_hour_reset: Utc::now(),
             log_file: File::create("/dev/null").unwrap(),
             ml_predictor: MLPredictor::new(MLPredictorConfig::default()),
+            traded_market_ids: HashSet::new(),
         }
     }
 
