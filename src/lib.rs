@@ -22,6 +22,7 @@ pub mod error;
 pub mod events;
 pub mod execution_quality;
 pub mod executor;
+pub mod fusion;
 pub mod ingester;
 pub mod ml;
 pub mod model;

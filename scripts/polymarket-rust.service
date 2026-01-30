@@ -1,0 +1,15 @@
+[Unit]
+Description=Polymarket Rust Live Trading Bot
+After=network.target
+
+[Service]
+Type=simple
+User=bot
+WorkingDirectory=/home/bot/clawd/projects/polymarket-bot
+ExecStart=/home/bot/clawd/projects/polymarket-bot/target/release/live_trading
+Restart=always
+RestartSec=30
+Environment=RUST_LOG=debug
+
+[Install]
+WantedBy=multi-user.target
